@@ -15,6 +15,8 @@ man3ext = 3
 man7dir = @mandir@/man7
 man7ext = 7
 PERL = @PERL@
+CXX = @CXX@
+CXXFLAGS = @CXXFLAGS@
 INSTALL = @INSTALL@
 INSTALL_PROGRAM = @INSTALL@ -m 755
 INSTALL_DATA = @INSTALL@ -m 644
@@ -56,7 +58,21 @@ config.h.in: configure.ac aclocal.m4 libev/libev.m4
 	cd $(srcdir); ./autogen.sh
 
 check: all
-	echo "no tests"
+	$(MAKE) check-xterm-compat
+
+check-xterm-compat:
+	mkdir -p tests
+	$(CXX) $(CXXFLAGS) -I$(srcdir)/src -o tests/xterm-keys $(srcdir)/tests/xterm-keys.C
+	tests/xterm-keys
+	rm -f tests/xterm-keys
+	@if command -v xvfb-run >/dev/null 2>&1 \
+	   && command -v xdotool >/dev/null 2>&1; then \
+	  PERL5LIB="src:$(srcdir)/src$${PERL5LIB:+:$$PERL5LIB}" \
+	  URXVT_PERL_LIB="$(srcdir)/src/perl" \
+	  xvfb-run -a $(srcdir)/tests/xterm-compat-integration src/rxvt; \
+	else \
+	  echo "SKIP xterm integration tests: Xvfb or xdotool unavailable"; \
+	fi
 
 Makefiles:
 	$(SHELL) config.status
@@ -66,6 +82,7 @@ cleandir: realclean
 distclean-local:
 	rm -f config.cache config.h config.log config.status
 	rm -f Makefile
+	rm -f tests/xterm-keys
 
 distdir:
 	cd doc && $(MAKE) distdepend

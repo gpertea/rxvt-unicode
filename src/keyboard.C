@@ -136,7 +136,8 @@ keyboard_manager::register_action (KeySym keysym, unsigned int state, const wcha
 }
 
 keysym_t *
-keyboard_manager::lookup_keysym (rxvt_term *term, KeySym keysym, unsigned int state)
+keyboard_manager::lookup_keysym (rxvt_term *term, KeySym keysym,
+                                 unsigned int state, bool exact_modifiers)
 {
   assert (("register_done() need to be called", hash[0] == 0));
 
@@ -149,15 +150,17 @@ keyboard_manager::lookup_keysym (rxvt_term *term, KeySym keysym, unsigned int st
   if (!!(term->priv_modes & PrivMode_aplKP) != !!(state & ShiftMask))
     state |= AppKeypadMask;
 
-  int index = find_keysym (keysym, state);
+  int index = find_keysym (keysym, state, exact_modifiers,
+                           term->ModMetaMask);
 
   return index >= 0 ? keymap [index] : 0;
 }
 
 bool
-keyboard_manager::dispatch (rxvt_term *term, KeySym keysym, unsigned int state, const char *kbuf, int len)
+keyboard_manager::dispatch (rxvt_term *term, KeySym keysym, unsigned int state,
+                            const char *kbuf, int len, bool exact_modifiers)
 {
-  keysym_t *key = lookup_keysym (term, keysym, state);
+  keysym_t *key = lookup_keysym (term, keysym, state, exact_modifiers);
 
   if (key)
     {
@@ -276,7 +279,9 @@ keyboard_manager::register_done ()
 }
 
 int
-keyboard_manager::find_keysym (KeySym keysym, unsigned int state)
+keyboard_manager::find_keysym (KeySym keysym, unsigned int state,
+                               bool exact_modifiers,
+                               unsigned int meta_mask)
 {
   int hashkey = keysym & KEYSYM_HASH_MASK;
   unsigned int index = hash [hashkey];
@@ -290,7 +295,13 @@ keyboard_manager::find_keysym (KeySym keysym, unsigned int state)
 
       if (key->keysym == keysym
           // match only the specified bits in state and ignore others
-          && (key->state & state) == key->state)
+          && (key->state & state) == key->state
+          // profile-managed keys require the same logical modifiers
+          && (!exact_modifiers
+              || ((key->state & (ShiftMask | ControlMask))
+                  == (state & (ShiftMask | ControlMask))
+                  && !!(key->state & (MetaMask | meta_mask))
+                     == !!(state & MetaMask))))
         return index;
     }
 

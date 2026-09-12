@@ -954,6 +954,25 @@ option B<-sbg>.
 Specifies the terminal type name to be set in the B<TERM> environment
 variable; option B<-tn>.
 
+=item B<xtermCompat:> I<boolean>
+
+Use xterm-style sequences for cursor, editing and function keys, and return
+standard C<rgb:> replies to OSC colour queries [default true]. If B<termName>
+is not set, a 256-colour build uses C<xterm-256color> and other builds use
+C<xterm>. An explicit B<termName> always wins; option B<-xterm-compat> enables
+the profile and B<+xterm-compat> disables it.
+
+A compiled rxvt-specific C<TERMINFO> path is not exported while this profile
+is active. An inherited C<TERMINFO> value is preserved.
+
+For keys handled by this profile, an unqualified C<keysym> resource applies
+only without Shift, Control, or the configured Meta modifier. An explicitly
+qualified mapping wins for that exact modifier combination. Existing local
+Shift+Insert paste and Shift+PageUp/PageDown scroll actions are preserved.
+
+This profile targets common application interoperability. It does not
+implement every xterm private extension, including OSC 52 clipboard exchange.
+
 =item B<lineSpace:> I<number>
 
 Specifies number of lines (pixel height) to insert between each row of

@@ -13,6 +13,11 @@ config.h.in
 Makefile.in
 install-sh
 
+tests/xterm-keys.C
+tests/capture-tty.py
+tests/capture-osc.py
+tests/xterm-compat-integration
+
 doc/embed
 doc/embed-tk
 doc/rxvt-tabbed
@@ -86,6 +91,7 @@ src/scrollbar.C
 src/scrollbar.h
 src/version.h
 src/xdefaults.C
+src/xterm_keys.h
 src/emman.h
 src/emman.c
 

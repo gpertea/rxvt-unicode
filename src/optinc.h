@@ -11,6 +11,7 @@
  def(scrollBar_right)
  def(scrollBar_floating)
  def(meta8)
+ def(xtermCompat)
  def(scrollTtyOutput)
  def(scrollTtyKeypress)
  def(transparent)

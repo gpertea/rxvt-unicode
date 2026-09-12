@@ -39,6 +39,7 @@
 #ifdef META8_OPTION
   def (meta8)
 #endif
+  def (xtermCompat)
 #ifdef MOUSE_WHEEL
   def (mouseWheelScrollPage)
 #endif

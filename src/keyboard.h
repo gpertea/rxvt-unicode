@@ -71,11 +71,15 @@ public:
   void unregister_action (KeySym keysym, unsigned int state);
   void register_action (KeySym keysym, unsigned int state, const wchar_t *ws);
   void register_done ();        // call this to make newly registered key bindings take effect
-  keysym_t *lookup_keysym (rxvt_term *term, KeySym keysym, unsigned int state);
-  bool dispatch (rxvt_term *term, KeySym keysym, unsigned int state, const char *kbuf, int len);
+  keysym_t *lookup_keysym (rxvt_term *term, KeySym keysym, unsigned int state,
+                           bool exact_modifiers = false);
+  bool dispatch (rxvt_term *term, KeySym keysym, unsigned int state,
+                 const char *kbuf, int len, bool exact_modifiers = false);
 
 private:
-  int find_keysym (KeySym keysym, unsigned int state);
+  int find_keysym (KeySym keysym, unsigned int state,
+                   bool exact_modifiers = false,
+                   unsigned int meta_mask = 0);
 
 private:
   uint16_t hash[KEYSYM_HASH_BUCKETS];

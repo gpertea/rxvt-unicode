@@ -595,6 +595,7 @@ rxvt_term::init_vars ()
   set_option (Opt_secondaryScroll);
   set_option (Opt_pastableTabs);
   set_option (Opt_intensityStyles);
+  set_option (Opt_xtermCompat);
   set_option (Opt_iso14755);
   set_option (Opt_iso14755_52);
   set_option (Opt_buffered);
@@ -999,7 +1000,9 @@ rxvt_term::init_env ()
   putenv (env_colorfgbg);
 
 #ifdef RXVT_TERMINFO
-  putenv ("TERMINFO=" RXVT_TERMINFO);
+  // a private rxvt database cannot describe the profile's TERM contract
+  if (!option (Opt_xtermCompat))
+    putenv ("TERMINFO=" RXVT_TERMINFO);
 #endif
 
   if (depth <= 2)
@@ -1013,6 +1016,12 @@ rxvt_term::init_env ()
       sprintf (env_term, "TERM=%s", rs[Rs_term_name]);
       putenv (env_term);
     }
+  else if (option (Opt_xtermCompat))
+#if USE_256_COLORS
+    putenv ((char *)"TERM=xterm-256color");
+#else
+    putenv ((char *)"TERM=xterm");
+#endif
   else
     putenv ((char *)"TERM=" TERMENV);
 

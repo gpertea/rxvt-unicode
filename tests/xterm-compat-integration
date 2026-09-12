@@ -1,0 +1,130 @@
+#!/bin/sh
+
+set -eu
+
+binary=${1:-src/rxvt}
+test_display=${DISPLAY:?DISPLAY must name a disposable X server}
+
+if test ! -x "$binary"; then
+  echo "xterm compatibility test binary is not executable: $binary" >&2
+  exit 1
+fi
+
+test_dir=$(mktemp -d /tmp/urxvt-xterm-test.XXXXXX)
+terminal_pid=
+
+cleanup ()
+{
+  if test -n "$terminal_pid"; then
+    kill "$terminal_pid" 2>/dev/null || true
+  fi
+  find "$test_dir" -type f -delete
+  rmdir "$test_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+run_key ()
+{
+  name=$1
+  key=$2
+  expected=$3
+  shift 3
+  output="$test_dir/$name.out"
+  title="urxvt-xterm-test-$name-$$"
+
+  "$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+    "$@" -e python3 "$(dirname "$0")/capture-tty.py" "$output" &
+  terminal_pid=$!
+  window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+  xdotool windowfocus --sync "$window"
+  xdotool key --window "$window" "$key"
+  wait "$terminal_pid"
+  terminal_pid=
+
+  actual=$(od -An -tx1 -v "$output" | tr -d ' \n')
+  if test "$actual" != "$expected"; then
+    printf '%s: got %s, expected %s\n' "$name" "$actual" "$expected" >&2
+    exit 1
+  fi
+}
+
+run_osc ()
+{
+  name=$1
+  selector=$2
+  terminator=$3
+  expected=$4
+  shift 4
+  output="$test_dir/$name.out"
+
+  "$binary" -display "$test_display" "$@" \
+    -e python3 "$(dirname "$0")/capture-osc.py" \
+    "$output" "$selector" "$terminator"
+  actual=$(od -An -tx1 -v "$output" | tr -d ' \n')
+  if test "$actual" != "$expected"; then
+    printf '%s: got %s, expected %s\n' "$name" "$actual" "$expected" >&2
+    exit 1
+  fi
+}
+
+run_key control-right ctrl+Right 1b5b313b3543
+run_key alt-up alt+Up 1b5b313b3341
+run_key shift-left shift+Left 1b5b313b3244
+run_key shift-alt-down shift+alt+Down 1b5b313b3442
+run_key shift-control-up shift+ctrl+Up 1b5b313b3641
+run_key alt-control-left alt+ctrl+Left 1b5b313b3744
+run_key all-modifiers-right shift+alt+ctrl+Right 1b5b313b3843
+run_key control-f1 ctrl+F1 1b5b313b3550
+run_key alt-f5 alt+F5 1b5b31353b337e
+run_key function-13 F13 1b5b32357e
+run_key legacy-control-right ctrl+Right 1b4f63 +xterm-compat
+run_key resource-disabled ctrl+Right 1b4f63 \
+  -xrm 'URxvt.xtermCompat: false'
+run_key cli-enable-precedence ctrl+Right 1b5b313b3543 \
+  -xrm 'URxvt.xtermCompat: false' -xterm-compat
+run_key cli-disable-precedence ctrl+Right 1b4f63 \
+  -xrm 'URxvt.xtermCompat: true' +xterm-compat
+run_key local-shift-page-up shift+Prior ''
+run_key local-shift-insert shift+Insert ''
+
+run_key resource-home Home 1b5b39397e -keysym.Home '\033[99~'
+run_key resource-control-home ctrl+Home 1b5b313b3548 \
+  -keysym.Home '\033[99~'
+run_key exact-control-home ctrl+Home 1b5b39387e \
+  -keysym.Home '\033[99~' -keysym.C-Home '\033[98~'
+
+env_output="$test_dir/environment"
+env -u TERMINFO "$binary" -display "$test_display" -e sh -c \
+  'printf "%s\n%s\n%s\n" "$TERM" "${COLORTERM-}" "${TERMINFO-unset}" > "$1"' \
+  sh "$env_output"
+test "$(sed -n '1p' "$env_output")" = xterm-256color
+test -n "$(sed -n '2p' "$env_output")"
+test "$(sed -n '3p' "$env_output")" = unset
+
+env -u TERMINFO "$binary" -display "$test_display" -tn vt100 -e sh -c \
+  'printf "%s\n%s\n" "$TERM" "${TERMINFO-unset}" > "$1"' sh "$env_output"
+test "$(sed -n '1p' "$env_output")" = vt100
+test "$(sed -n '2p' "$env_output")" = unset
+
+TERMINFO="$test_dir/inherited" "$binary" -display "$test_display" -e sh -c \
+  'printf "%s\n" "$TERMINFO" > "$1"' sh "$env_output"
+test "$(sed -n '1p' "$env_output")" = "$test_dir/inherited"
+
+rgb_bel=$(printf '\033]10;rgb:ffff/0000/0000\007' | od -An -tx1 -v | tr -d ' \n')
+rgba_bel=$(printf '\033]10;rgba:ffff/0000/0000/4444\007' | od -An -tx1 -v | tr -d ' \n')
+rgb_st=$(printf '\033]11;rgb:ffff/0000/0000\033\\' | od -An -tx1 -v | tr -d ' \n')
+run_osc foreground-rgb 10 bel "$rgb_bel" -fg rgba:ffff/0000/0000/4444
+run_osc foreground-rgba 10 bel "$rgba_bel" +xterm-compat \
+  -fg rgba:ffff/0000/0000/4444
+run_osc background-st 11 st "$rgb_st" -bg rgba:ffff/0000/0000/4444
+
+if command -v xterm >/dev/null 2>&1; then
+  profile_binary=$binary
+  binary=$(command -v xterm)
+  run_key reference-control-right ctrl+Right 1b5b313b3543
+  run_key reference-all-modifiers-right shift+alt+ctrl+Right 1b5b313b3843
+  run_key reference-function-13 F13 1b5b32357e
+  binary=$profile_binary
+else
+  echo "SKIP reference comparisons: xterm unavailable"
+fi

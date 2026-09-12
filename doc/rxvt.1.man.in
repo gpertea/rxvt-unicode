@@ -980,6 +980,24 @@ option \fB\-sbg\fR.
 .IX Item "termName: termname"
 Specifies the terminal type name to be set in the \fB\s-1TERM\s0\fR environment
 variable; option \fB\-tn\fR.
+.IP "\fBxtermCompat:\fR \fIboolean\fR" 4
+.IX Item "xtermCompat: boolean"
+Use xterm-style sequences for cursor, editing and function keys, and return
+standard \f(CW\*(C`rgb:\*(C'\fR replies to OSC colour queries [default true]. If \fBtermName\fR
+is not set, a 256-colour build uses \f(CW\*(C`xterm-256color\*(C'\fR and other builds use
+\&\f(CW\*(C`xterm\*(C'\fR. An explicit \fBtermName\fR always wins; option \fB\-xterm-compat\fR enables
+the profile and \fB+xterm-compat\fR disables it.
+.Sp
+A compiled rxvt-specific \f(CW\*(C`TERMINFO\*(C'\fR path is not exported while this profile
+is active. An inherited \f(CW\*(C`TERMINFO\*(C'\fR value is preserved.
+.Sp
+For keys handled by this profile, an unqualified \f(CW\*(C`keysym\*(C'\fR resource applies
+only without Shift, Control, or the configured Meta modifier. An explicitly
+qualified mapping wins for that exact modifier combination. Existing local
+Shift+Insert paste and Shift+PageUp/PageDown scroll actions are preserved.
+.Sp
+This profile targets common application interoperability. It does not
+implement every xterm private extension, including \s-1OSC 52\s0 clipboard exchange.
 .IP "\fBlineSpace:\fR \fInumber\fR" 4
 .IX Item "lineSpace: number"
 Specifies number of lines (pixel height) to insert between each row of

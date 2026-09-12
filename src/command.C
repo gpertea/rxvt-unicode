@@ -51,6 +51,7 @@
 #include "rxvtperl.h"
 #include "version.h"
 #include "command.h"
+#include "xterm_keys.h"
 
 #ifdef KEYSYM_RESOURCE
 # include "keyboard.h"
@@ -397,6 +398,15 @@ map_function_key (KeySym keysym)
   return param;
 }
 
+static inline unsigned int
+xterm_modifier_parameter (unsigned int state, unsigned int meta_mask)
+{
+  return 1
+         + !!(state & ShiftMask)
+         + 2 * !!(state & meta_mask)
+         + 4 * !!(state & ControlMask);
+}
+
 static inline wchar_t *
 rxvt_wcsdup (const wchar_t *str, int len)
 {
@@ -410,6 +420,7 @@ void ecb_cold
 rxvt_term::key_press (XKeyEvent &ev)
 {
   int ctrl, meta, shft, len;
+  bool xterm_sequence = false;
   KeySym keysym = NoSymbol;
   char rkbuf[KBUFSZ + 1];
   char *kbuf = rkbuf + 1;
@@ -491,7 +502,8 @@ rxvt_term::key_press (XKeyEvent &ev)
       KeySym orig_keysym = keysym;
 
       /* Shift + F1 - F10 generates F11 - F20 */
-      if (shft && keysym >= XK_F1 && keysym <= XK_F10)
+      if (!option (Opt_xtermCompat)
+          && shft && keysym >= XK_F1 && keysym <= XK_F10)
         {
           keysym += (XK_F11 - XK_F1);
           shft = 0;	/* turn off Shift */
@@ -507,6 +519,12 @@ rxvt_term::key_press (XKeyEvent &ev)
 
           keysym = translate_keypad (keysym, kp);
 
+          if (option (Opt_xtermCompat))
+            xterm_sequence = xterm_key_sequence (
+              keysym, xterm_modifier_parameter (ev.state, ModMetaMask),
+              priv_modes & PrivMode_aplCUR, kbuf, KBUFSZ);
+
+          if (!xterm_sequence)
           switch (keysym)
             {
 #ifndef NO_BACKSPACE_KEY
@@ -647,14 +665,15 @@ rxvt_term::key_press (XKeyEvent &ev)
                *   Ctrl+Prior = "ESC[5^"
                *   Ctrl+Shift+Prior = "ESC[5@"
                */
-              if (kbuf[0] == C0_ESC && kbuf[1] == '[' && kbuf[len - 1] == '~')
+              if (!xterm_sequence
+                  && kbuf[0] == C0_ESC && kbuf[1] == '[' && kbuf[len - 1] == '~')
                 kbuf[len - 1] = (shft ? (ctrl ? '@' : '$') : (ctrl ? '^' : '~'));
 
               /*
                * Pass meta for all function keys, if 'meta' option set
                */
 #ifdef META8_OPTION
-              if (meta && (meta_char == 0x80))
+              if (!xterm_sequence && meta && (meta_char == 0x80))
                 kbuf[len - 1] |= 0x80;
 #endif
             }
@@ -689,7 +708,7 @@ rxvt_term::key_press (XKeyEvent &ev)
     }
 
   /* escape prefix */
-  if (len && meta
+  if (len && meta && !xterm_sequence
 #ifdef META8_OPTION
       && meta_char == C0_ESC
 #endif
@@ -705,7 +724,9 @@ rxvt_term::key_press (XKeyEvent &ev)
   if (keysym != NoSymbol)
     {
 #ifdef KEYSYM_RESOURCE
-      if (keyboard->dispatch (this, keysym, ev.state, kbuf, len))
+      if (keyboard->dispatch (this, keysym, ev.state, kbuf, len,
+                              option (Opt_xtermCompat)
+                              && xterm_key_is_managed (keysym)))
         return;
 #endif
 
@@ -3446,7 +3467,7 @@ rxvt_term::process_color_seq (int report, int color, const char *str, string_ter
       char rgba_str[32];
 
 #if XFT
-      if (c.a != rgba::MAX_CC)
+      if (!option (Opt_xtermCompat) && c.a != rgba::MAX_CC)
         snprintf (rgba_str, sizeof (rgba_str), "rgba:%04x/%04x/%04x/%04x", c.r, c.g, c.b, c.a);
       else
 #endif

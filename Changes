@@ -1,5 +1,8 @@
 rxvt-unicode changelog <= google-friendly title
 
+	- add a default-on xterm compatibility profile for standard modified
+	  key sequences, truthful TERM selection, and RGB OSC color replies.
+
 TODO: xcopyarea pass broken, fix and improve
 TODO: event mechanism that replaces on_user_command with something more scalable.
 TODO: slipwheeling needs a keyboard grab to get key release events.
