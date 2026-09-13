@@ -2747,11 +2747,12 @@ rxvt_term::paste (char *data, unsigned int len) noexcept
  * EXT: button 2 release
  */
 void
-rxvt_term::selection_request (Time tm, int selnum) noexcept
+rxvt_term::selection_request (Time tm, int selnum, bool fallback) noexcept
 {
   if (!selection_req)
     {
-      selection_req = new rxvt_selection (display, selnum, tm, vt, xa[XA_VT_SELECTION], this);
+      selection_req = new rxvt_selection (display, selnum, tm, vt,
+                                          xa[XA_VT_SELECTION], this, fallback);
       selection_req->run ();
     }
 }
@@ -2910,7 +2911,44 @@ rxvt_term::selection_make (Time tm)
   if (HOOK_INVOKE ((this, HOOK_SEL_GRAB, DT_LONG, (long)tm, DT_END)))
     return;
 
+  if (option (Opt_selectionToClipboard) && selection.text)
+    {
+      // keep an independent snapshot when either X selection is lost later.
+      free (selection.clip_text);
+      selection.clip_text = (wchar_t *)rxvt_malloc (
+        (selection.len + 1) * sizeof (wchar_t));
+      memcpy (selection.clip_text, selection.text,
+              (selection.len + 1) * sizeof (wchar_t));
+      selection.clip_len = selection.len;
+    }
+
   selection_grab (tm);
+
+  if (option (Opt_selectionToClipboard) && selection.clip_text)
+    selection_grab (tm, true);
+}
+
+bool
+rxvt_term::selection_set_utf8 (const char *data, unsigned int len,
+                               Time tm, bool clipboard) noexcept
+{
+  wchar_t *text = rxvt_utf8towcs (data, len);
+  unsigned int text_len = wcslen (text);
+  wchar_t *&target = clipboard ? selection.clip_text : selection.text;
+  unsigned int &target_len = clipboard ? selection.clip_len : selection.len;
+
+  free (target);
+  target = text;
+  target_len = text_len;
+
+  if (!clipboard)
+    {
+      want_refresh = 1;
+      CLEAR_SELECTION ();
+      selection.op = SELECTION_DONE;
+    }
+
+  return selection_grab (tm, clipboard);
 }
 
 bool

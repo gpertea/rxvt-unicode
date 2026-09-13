@@ -64,14 +64,20 @@ check-xterm-compat:
 	mkdir -p tests
 	$(CXX) $(CXXFLAGS) -I$(srcdir)/src -o tests/xterm-keys $(srcdir)/tests/xterm-keys.C
 	tests/xterm-keys
-	rm -f tests/xterm-keys
+	$(CXX) $(CXXFLAGS) -I$(srcdir)/src -o tests/osc52 $(srcdir)/tests/osc52.C
+	tests/osc52
+	rm -f tests/xterm-keys tests/osc52
 	@if command -v xvfb-run >/dev/null 2>&1 \
-	   && command -v xdotool >/dev/null 2>&1; then \
+	   && command -v xdotool >/dev/null 2>&1 \
+	   && command -v xclip >/dev/null 2>&1 \
+	   && command -v xprop >/dev/null 2>&1; then \
 	  PERL5LIB="src:$(srcdir)/src$${PERL5LIB:+:$$PERL5LIB}" \
 	  URXVT_PERL_LIB="$(srcdir)/src/perl" \
-	  xvfb-run -a $(srcdir)/tests/xterm-compat-integration src/rxvt; \
+	  xvfb-run -a sh -c '\
+	    $(srcdir)/tests/xterm-compat-integration src/rxvt && \
+	    $(srcdir)/tests/clipboard-tmux-integration src/rxvt'; \
 	else \
-	  echo "SKIP xterm integration tests: Xvfb or xdotool unavailable"; \
+	  echo "SKIP X integration tests: Xvfb, xdotool, xclip, or xprop unavailable"; \
 	fi
 
 Makefiles:
@@ -82,7 +88,7 @@ cleandir: realclean
 distclean-local:
 	rm -f config.cache config.h config.log config.status
 	rm -f Makefile
-	rm -f tests/xterm-keys
+	rm -f tests/xterm-keys tests/osc52
 
 distdir:
 	cd doc && $(MAKE) distdepend

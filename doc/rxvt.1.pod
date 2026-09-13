@@ -971,7 +971,44 @@ qualified mapping wins for that exact modifier combination. Existing local
 Shift+Insert paste and Shift+PageUp/PageDown scroll actions are preserved.
 
 This profile targets common application interoperability. It does not
-implement every xterm private extension, including OSC 52 clipboard exchange.
+implement every xterm private extension.
+
+=item B<selectionToClipboard:> I<boolean>
+
+Copy every completed native selection to independent PRIMARY and CLIPBOARD
+snapshots [default true]. Losing ownership of one X selection does not clear
+the other. The C<selection-to-clipboard> Perl extension is redundant while
+this option is enabled; option B<-selection-to-clipboard> enables it and
+B<+selection-to-clipboard> restores PRIMARY-only selection.
+
+=item B<middleClickPasteClipboard:> I<boolean>
+
+Reserve Button2 for local CLIPBOARD paste [default true]. Both press and
+release are consumed locally even when the application enabled mouse
+reporting. A missing or empty CLIPBOARD does not fall back to PRIMARY or
+CUT_BUFFER0. Paste hooks, bracketed paste, and C<confirm-paste> still apply.
+Button2-specific application and Perl mouse bindings require this option to
+be disabled with B<+middle-click-paste-clipboard>.
+
+=item B<osc52Write:> I<boolean>
+
+Allow applications to set X selections with C<OSC 52 ; Pc ; Pd> [default
+true]. C<Pc> may contain C<c> (CLIPBOARD), C<p> (PRIMARY), or C<s> (the
+configured selection). Empty C<Pc> selects C<s>. C<Pd> must be canonical
+RFC 4648 Base64 containing valid UTF-8 text without embedded NUL bytes.
+Malformed data and unsupported selection names are ignored without changing
+an existing selection; option B<+osc52-write> disables all writes.
+
+Clipboard queries using C<?> are never answered. Any process which can write
+to the terminal can attempt a clipboard write, including a process reached
+through SSH. Disable this option when terminal output is not trusted.
+
+=item B<osc52MaxBytes:> I<number>
+
+Limit the decoded size of one OSC 52 write [default 16384, maximum 24000];
+option B<-osc52-max-bytes>. The maximum keeps the complete encoded control
+sequence inside rxvt-unicode's fixed 32768-byte command buffer. Oversized
+writes are ignored without altering either selection.
 
 =item B<lineSpace:> I<number>
 
@@ -1443,9 +1480,11 @@ Continuous scroll with B<Button2>.
 
 =head1 MOUSE REPORTING
 
-To temporarily override mouse reporting, for either the scrollbar or
-the normal text selection/insertion, hold either the Shift or the Meta
-(Alt) key while performing the desired mouse action.
+To temporarily override mouse reporting for the scrollbar or normal text
+selection, hold either the Shift or the Meta (Alt) key while performing the
+desired mouse action. With B<middleClickPasteClipboard> enabled, Button2 is
+always a local CLIPBOARD paste and needs no modifier. Button1, Button3, and
+wheel events retain normal application mouse routing.
 
 If mouse reporting mode is active, the normal scrollbar actions are
 disabled -- on the assumption that we are using a fullscreen
@@ -1478,8 +1517,9 @@ the selection.
 =item B<Pasting>:
 
 Pressing and releasing the Middle mouse button in an B<@@RXVT_NAME@@>
-window causes the value of the PRIMARY selection (or CLIPBOARD with the
-B<Meta> modifier) to be inserted as if it had been typed on the keyboard.
+window inserts CLIPBOARD when B<middleClickPasteClipboard> is enabled. With
+that option disabled, the historical behavior inserts PRIMARY, or CLIPBOARD
+with the Meta modifier.
 
 Pressing B<Shift-Insert> causes the value of the PRIMARY selection to be
 inserted too.
@@ -1489,6 +1529,12 @@ B<Ctrl-Meta-v> to interact with the CLIPBOARD selection. The first
 binding causes the value of the internal selection to be copied to the
 CLIPBOARD selection, while the second binding causes the value of the
 CLIPBOARD selection to be inserted.
+
+For tmux, current releases normally advertise OSC 52 automatically when the
+outer C<TERM> matches C<xterm*>. Use C<set -s set-clipboard external> so tmux
+copy mode writes the outer clipboard without accepting clipboard writes from
+applications inside tmux. A ready-to-source example is installed in the
+source tree as C<contrib/tmux/urxvt-integration.conf>.
 
 =back
 

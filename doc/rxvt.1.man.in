@@ -997,7 +997,40 @@ qualified mapping wins for that exact modifier combination. Existing local
 Shift+Insert paste and Shift+PageUp/PageDown scroll actions are preserved.
 .Sp
 This profile targets common application interoperability. It does not
-implement every xterm private extension, including \s-1OSC 52\s0 clipboard exchange.
+implement every xterm private extension.
+.IP "\fBselectionToClipboard:\fR \fIboolean\fR" 4
+.IX Item "selectionToClipboard: boolean"
+Copy every completed native selection to independent PRIMARY and CLIPBOARD
+snapshots [default true]. Losing ownership of one X selection does not clear
+the other. The \f(CW\*(C`selection\-to\-clipboard\*(C'\fR Perl extension is redundant while
+this option is enabled; option \fB\-selection\-to\-clipboard\fR enables it and
+\&\fB+selection\-to\-clipboard\fR restores PRIMARY-only selection.
+.IP "\fBmiddleClickPasteClipboard:\fR \fIboolean\fR" 4
+.IX Item "middleClickPasteClipboard: boolean"
+Reserve Button2 for local CLIPBOARD paste [default true]. Both press and
+release are consumed locally even when the application enabled mouse
+reporting. A missing or empty CLIPBOARD does not fall back to PRIMARY or
+CUT_BUFFER0. Paste hooks, bracketed paste, and \f(CW\*(C`confirm\-paste\*(C'\fR still apply.
+Button2\-specific application and Perl mouse bindings require this option to
+be disabled with \fB+middle\-click\-paste\-clipboard\fR.
+.IP "\fBosc52Write:\fR \fIboolean\fR" 4
+.IX Item "osc52Write: boolean"
+Allow applications to set X selections with \f(CW\*(C`OSC 52 ; Pc ; Pd\*(C'\fR [default
+true]. \f(CW\*(C`Pc\*(C'\fR may contain \f(CW\*(C`c\*(C'\fR (CLIPBOARD), \f(CW\*(C`p\*(C'\fR (PRIMARY), or \f(CW\*(C`s\*(C'\fR (the
+configured selection). Empty \f(CW\*(C`Pc\*(C'\fR selects \f(CW\*(C`s\*(C'\fR. \f(CW\*(C`Pd\*(C'\fR must be canonical
+RFC 4648 Base64 containing valid UTF\-8 text without embedded NUL bytes.
+Malformed data and unsupported selection names are ignored without changing
+an existing selection; option \fB+osc52\-write\fR disables all writes.
+.Sp
+Clipboard queries using \f(CW\*(C`?\*(C'\fR are never answered. Any process which can write
+to the terminal can attempt a clipboard write, including a process reached
+through SSH. Disable this option when terminal output is not trusted.
+.IP "\fBosc52MaxBytes:\fR \fInumber\fR" 4
+.IX Item "osc52MaxBytes: number"
+Limit the decoded size of one OSC 52 write [default 16384, maximum 24000];
+option \fB\-osc52\-max\-bytes\fR. The maximum keeps the complete encoded control
+sequence inside rxvt-unicode's fixed 32768\-byte command buffer. Oversized
+writes are ignored without altering either selection.
 .IP "\fBlineSpace:\fR \fInumber\fR" 4
 .IX Item "lineSpace: number"
 Specifies number of lines (pixel height) to insert between each row of

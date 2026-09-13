@@ -428,6 +428,7 @@ enum {
   XTerm_Color_HTC        = 19,      // change actual 'Highlight' fg color
   XTerm_logfile          = 46,      // not implemented
   XTerm_font             = 50,
+  XTerm_selection        = 52,
 
   XTerm_konsole30        = 30,      // reserved for konsole
   XTerm_konsole31        = 31,      // reserved for konsole
@@ -1126,7 +1127,8 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
                   seen_input:1,         /* whether we have seen some program output yet */
                   seen_resize:1,	/* whether we had a resize event */
                   init_done:1,
-                  parsed_geometry:1;
+                  parsed_geometry:1,
+                  local_button2:1;
 
   unsigned char   refresh_type,
 #ifdef META8_OPTION
@@ -1164,6 +1166,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
                   pointerBlankDelay,
 # endif
                   multiClickTime,
+                  osc52_max_bytes,
                   cursor_type,
                   allowedxerror;
 /* ---------- */
@@ -1375,6 +1378,7 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   char *get_to_st (string_term &st);
   void process_dcs_seq ();
   void process_osc_seq ();
+  void process_osc52 (char *str);
   void process_color_seq (int report, int color, const char *str, string_term &st);
   void process_xterm_seq (int op, char *str, string_term &st);
   unsigned int map_rgb24_color (unsigned int r, unsigned int g, unsigned int b, unsigned int a);
@@ -1531,10 +1535,13 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
 
   void selection_check (int check_more) noexcept;
   void selection_changed () noexcept; /* sets want_refresh, corrects coordinates */
-  void selection_request (Time tm, int selnum = Sel_Primary) noexcept;
+  void selection_request (Time tm, int selnum = Sel_Primary,
+                          bool fallback = true) noexcept;
   void selection_clear (bool clipboard = false) noexcept;
   void selection_make (Time tm);
   bool selection_grab (Time tm, bool clipboard = false) noexcept;
+  bool selection_set_utf8 (const char *data, unsigned int len,
+                           Time tm, bool clipboard) noexcept;
   void selection_start_colrow (int col, int row) noexcept;
   void selection_delimit_word (enum page_dirn dirn, const row_col_t *mark, row_col_t *ret) noexcept;
   void selection_extend_colrow (int32_t col, int32_t row, int button3, int buttonpress, int clickchange) noexcept;

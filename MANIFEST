@@ -14,9 +14,15 @@ Makefile.in
 install-sh
 
 tests/xterm-keys.C
+tests/osc52.C
 tests/capture-tty.py
 tests/capture-osc.py
+tests/capture-mouse-paste.py
+tests/emit-osc52.py
 tests/xterm-compat-integration
+tests/clipboard-tmux-integration
+
+contrib/tmux/urxvt-integration.conf
 
 doc/embed
 doc/embed-tk
@@ -91,6 +97,7 @@ src/scrollbar.C
 src/scrollbar.h
 src/version.h
 src/xdefaults.C
+src/osc52.h
 src/xterm_keys.h
 src/emman.h
 src/emman.c

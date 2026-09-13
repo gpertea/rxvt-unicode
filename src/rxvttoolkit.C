@@ -989,8 +989,11 @@ rxvt_color::fade (rxvt_screen *screen, int percent, rxvt_color &result, const rg
   );
 }
 
-rxvt_selection::rxvt_selection (rxvt_display *disp, int selnum, Time tm, Window win, Atom prop, rxvt_term *term)
-: display (disp), request_time (tm), request_win (win), request_prop (prop), term (term)
+rxvt_selection::rxvt_selection (rxvt_display *disp, int selnum, Time tm,
+                                Window win, Atom prop, rxvt_term *term,
+                                bool fallback)
+: term (term), cb_sv (0), display (disp), request_time (tm), request_win (win),
+  request_prop (prop), allow_fallback (fallback)
 {
   assert (selnum >= Sel_Primary && selnum <= Sel_Clipboard);
 
@@ -1002,7 +1005,6 @@ rxvt_selection::rxvt_selection (rxvt_display *disp, int selnum, Time tm, Window 
   incr_buf_size = incr_buf_fill = 0;
   selection_wait = Sel_normal;
   selection_type = selnum;
-  cb_sv = 0;
 }
 
 void
@@ -1045,8 +1047,10 @@ rxvt_selection::run ()
     return;
 #endif
 
-  // fallback to CUT_BUFFER0 if the requested property has no owner
-  handle_selection (display->root, XA_CUT_BUFFER0, false);
+  if (allow_fallback)
+    handle_selection (display->root, XA_CUT_BUFFER0, false);
+  else
+    finish ();
 }
 
 void
@@ -1176,8 +1180,9 @@ rxvt_selection::handle_selection (Window win, Atom prop, bool delete_prop)
         }
       else
         {
-          // avoid recursion
-          if (win != display->root || prop != XA_CUT_BUFFER0)
+          // avoid recursion and honor strict selection requests.
+          if (allow_fallback
+              && (win != display->root || prop != XA_CUT_BUFFER0))
             {
               XFree (ct.value);
 

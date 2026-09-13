@@ -1,0 +1,281 @@
+#!/bin/sh
+
+set -eu
+
+binary=${1:-src/rxvt}
+test_display=${DISPLAY:?DISPLAY must name a disposable X server}
+test_dir=$(mktemp -d /tmp/urxvt-clipboard-test.XXXXXX)
+terminal_pid=
+owner_pids=
+tmux_socket=urxvt-clipboard-$$
+
+cleanup ()
+{
+  if test -n "$terminal_pid"; then
+    kill "$terminal_pid" 2>/dev/null || true
+  fi
+  if test -n "$owner_pids"; then
+    kill $owner_pids 2>/dev/null || true
+  fi
+  if command -v tmux >/dev/null 2>&1; then
+    tmux -L "$tmux_socket" kill-server 2>/dev/null || true
+  fi
+  find "$test_dir" -type f -delete
+  rmdir "$test_dir"
+}
+trap cleanup EXIT HUP INT TERM
+
+wait_file ()
+{
+  file=$1
+  count=50
+  while test ! -e "$file" && test "$count" -gt 0; do
+    sleep 0.1
+    count=$((count - 1))
+  done
+  test -e "$file"
+}
+
+wait_selection_hex ()
+{
+  selection_name=$1
+  expected=$2
+  count=50
+
+  while test "$count" -gt 0; do
+    actual=$(timeout 1s xclip -selection "$selection_name" -out 2>/dev/null \
+      | od -An -tx1 -v | tr -d ' \n') || actual=missing
+    if test "$actual" = "$expected"; then
+      return
+    fi
+    sleep 0.1
+    count=$((count - 1))
+  done
+
+  printf '%s selection: got %s, expected %s\n' \
+    "$selection_name" "$actual" "$expected" >&2
+  return 1
+}
+
+start_osc ()
+{
+  name=$1
+  terminator=$2
+  shift 2
+  ready="$test_dir/$name.ready"
+  release="$test_dir/$name.release"
+  title="urxvt-clipboard-$name-$$"
+
+  "$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+    -e python3 "$(dirname "$0")/emit-osc52.py" \
+    "$ready" "$release" "$terminator" "$@" &
+  terminal_pid=$!
+  timeout 5s xdotool search --sync --name "$title" >/dev/null
+  wait_file "$ready"
+}
+
+stop_terminal ()
+{
+  : > "$release"
+  wait "$terminal_pid"
+  terminal_pid=
+}
+
+start_osc clipboard-bel bel c Y2xpcGJvYXJk
+wait_selection_hex clipboard 636c6970626f617264
+stop_terminal
+
+start_osc primary-st st p cHJpbWFyeQ==
+wait_selection_hex primary 7072696d617279
+stop_terminal
+
+start_osc select-both bel s dW5pZmllZA==
+wait_selection_hex primary 756e6966696564
+wait_selection_hex clipboard 756e6966696564
+stop_terminal
+
+start_osc utf8 bel c Y2Fmw6k=
+wait_selection_hex clipboard 636166c3a9
+stop_terminal
+
+start_osc empty bel c ''
+wait_selection_hex clipboard ''
+stop_terminal
+
+start_osc malformed bel c b2xk c '%%%='
+wait_selection_hex clipboard 6f6c64
+stop_terminal
+
+start_osc invalid-selector bel c b2xk q bmV3
+wait_selection_hex clipboard 6f6c64
+stop_terminal
+
+start_osc invalid-utf8 bel c b2xk c /w==
+wait_selection_hex clipboard 6f6c64
+stop_terminal
+
+ready="$test_dir/limited.ready"
+release="$test_dir/limited.release"
+title="urxvt-clipboard-limited-$$"
+"$binary" -display "$test_display" -title "$title" -osc52-max-bytes 3 \
+  -e python3 "$(dirname "$0")/emit-osc52.py" \
+  "$ready" "$release" bel c b2xk c dG9vLWxvbmc= &
+terminal_pid=$!
+timeout 5s xdotool search --sync --name "$title" >/dev/null
+wait_file "$ready"
+wait_selection_hex clipboard 6f6c64
+stop_terminal
+
+query_output="$test_dir/query.out"
+"$binary" -display "$test_display" \
+  -e python3 "$(dirname "$0")/capture-osc.py" \
+  "$query_output" '52;c' bel
+test ! -s "$query_output"
+
+xprop -root -f CUT_BUFFER0 8s -set CUT_BUFFER0 stale
+mouse_output="$test_dir/strict-empty.out"
+title="urxvt-clipboard-strict-empty-$$"
+"$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+  -e python3 "$(dirname "$0")/capture-mouse-paste.py" "$mouse_output" &
+terminal_pid=$!
+window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+sleep 0.2
+xdotool mousemove --window "$window" 40 20 click 2
+wait "$terminal_pid"
+terminal_pid=
+test ! -s "$mouse_output"
+
+printf external | xclip -selection clipboard -loops 20 >/dev/null 2>&1 &
+owner_pids="$owner_pids $!"
+wait_selection_hex clipboard 65787465726e616c
+ready="$test_dir/disabled.ready"
+release="$test_dir/disabled.release"
+title="urxvt-clipboard-disabled-$$"
+"$binary" -display "$test_display" -title "$title" \
+  -xrm 'URxvt.osc52Write: false' \
+  -e python3 "$(dirname "$0")/emit-osc52.py" \
+  "$ready" "$release" bel c Y2hhbmdlZA== &
+terminal_pid=$!
+timeout 5s xdotool search --sync --name "$title" >/dev/null
+wait_file "$ready"
+wait_selection_hex clipboard 65787465726e616c
+stop_terminal
+
+printf primary | xclip -selection primary -loops 20 >/dev/null 2>&1 &
+owner_pids="$owner_pids $!"
+printf clipboard | xclip -selection clipboard -loops 20 >/dev/null 2>&1 &
+owner_pids="$owner_pids $!"
+wait_selection_hex clipboard 636c6970626f617264
+
+mouse_output="$test_dir/middle.out"
+title="urxvt-clipboard-middle-$$"
+"$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+  -e python3 "$(dirname "$0")/capture-mouse-paste.py" \
+  "$mouse_output" bracketed &
+terminal_pid=$!
+window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+sleep 0.2
+xdotool mousemove --window "$window" 40 20 click 2
+wait "$terminal_pid"
+terminal_pid=
+actual=$(od -An -tx1 -v "$mouse_output" | tr -d ' \n')
+test "$actual" = 1b5b3230307e636c6970626f6172641b5b3230317e
+
+mouse_output="$test_dir/legacy-middle.out"
+title="urxvt-clipboard-legacy-middle-$$"
+"$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+  +middle-click-paste-clipboard \
+  -e python3 "$(dirname "$0")/capture-mouse-paste.py" "$mouse_output" &
+terminal_pid=$!
+window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+sleep 0.2
+xdotool mousemove --window "$window" 40 20 click 2
+wait "$terminal_pid"
+terminal_pid=
+actual=$(od -An -tx1 -v "$mouse_output" | tr -d ' \n')
+case "$actual" in
+  1b5b3c313b*) ;;
+  *) printf 'legacy Button2 did not reach mouse reporting: %s\n' "$actual" >&2; exit 1 ;;
+esac
+
+for report_case in button1 wheel; do
+  mouse_output="$test_dir/$report_case.out"
+  title="urxvt-clipboard-$report_case-$$"
+  "$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+    -e python3 "$(dirname "$0")/capture-mouse-paste.py" "$mouse_output" &
+  terminal_pid=$!
+  window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+  sleep 0.2
+  if test "$report_case" = button1; then
+    xdotool mousemove --window "$window" 40 20 click 1
+    expected_prefix=1b5b3c303b
+  else
+    xdotool mousemove --window "$window" 40 20 click 4
+    expected_prefix=1b5b3c36343b
+  fi
+  wait "$terminal_pid"
+  terminal_pid=
+  actual=$(od -An -tx1 -v "$mouse_output" | tr -d ' \n')
+  case "$actual" in
+    "$expected_prefix"*) ;;
+    *) printf '%s did not reach mouse reporting: %s\n' \
+         "$report_case" "$actual" >&2; exit 1 ;;
+  esac
+done
+
+kill $owner_pids 2>/dev/null || true
+owner_pids=
+title="urxvt-native-selection-$$"
+"$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+  -fn fixed -e sh -c 'printf native-selection; sleep 10' &
+terminal_pid=$!
+window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+sleep 0.3
+xdotool mousemove --window "$window" 30 10 click --repeat 2 --delay 50 1
+wait_selection_hex primary 6e61746976652d73656c656374696f6e
+wait_selection_hex clipboard 6e61746976652d73656c656374696f6e
+printf replacement | xclip -selection clipboard -loops 5 >/dev/null 2>&1 &
+owner_pids=$!
+wait_selection_hex clipboard 7265706c6163656d656e74
+wait_selection_hex primary 6e61746976652d73656c656374696f6e
+kill "$terminal_pid"
+wait "$terminal_pid" 2>/dev/null || true
+terminal_pid=
+
+title="urxvt-primary-only-selection-$$"
+"$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+  -fn fixed +selection-to-clipboard \
+  -e sh -c 'printf native-selection; sleep 10' &
+terminal_pid=$!
+window=$(timeout 5s xdotool search --sync --name "$title" | tail -n 1)
+sleep 0.3
+xdotool mousemove --window "$window" 30 10 click --repeat 2 --delay 50 1
+wait_selection_hex primary 6e61746976652d73656c656374696f6e
+wait_selection_hex clipboard 7265706c6163656d656e74
+kill "$terminal_pid"
+wait "$terminal_pid" 2>/dev/null || true
+terminal_pid=
+
+if command -v tmux >/dev/null 2>&1; then
+  title="urxvt-tmux-osc52-$$"
+  "$binary" -display "$test_display" -title "$title" -geometry 40x4 \
+    -e tmux -L "$tmux_socket" -f \
+    "$(dirname "$0")/../contrib/tmux/urxvt-integration.conf" \
+    new-session 'sleep 10' &
+  terminal_pid=$!
+  timeout 5s xdotool search --sync --name "$title" >/dev/null
+  count=50
+  while ! tmux -L "$tmux_socket" list-clients >/dev/null 2>&1 \
+        && test "$count" -gt 0; do
+    sleep 0.1
+    count=$((count - 1))
+  done
+  tmux -L "$tmux_socket" info | grep -F 'Ms: (string)' >/dev/null
+  tmux -L "$tmux_socket" set-buffer -w 'tmux-clipboard'
+  wait_selection_hex clipboard 746d75782d636c6970626f617264
+  tmux -L "$tmux_socket" kill-server
+  wait "$terminal_pid" 2>/dev/null || true
+  terminal_pid=
+else
+  printf '%s\n' 'SKIP tmux OSC 52 integration: tmux unavailable'
+fi

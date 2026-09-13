@@ -51,6 +51,7 @@
 #include "rxvtperl.h"
 #include "version.h"
 #include "command.h"
+#include "osc52.h"
 #include "xterm_keys.h"
 
 #ifdef KEYSYM_RESOURCE
@@ -1625,6 +1626,9 @@ rxvt_term::x_cb (XEvent &ev)
         if (hidden_pointer)
           pointer_unblank ();
 #endif
+        if (local_button2 && ev.xbutton.state & Button2Mask)
+          break;
+
         if (!bypass_keystate
             && ((priv_modes & PrivMode_MouseBtnEvent && ev.xbutton.state & (Button1Mask|Button2Mask|Button3Mask))
                 || priv_modes & PrivMode_MouseAnyEvent))
@@ -1916,6 +1920,16 @@ rxvt_term::button_press (XButtonEvent &ev)
    */
   if (ev.window == vt)
     {
+      if (ev.button == Button2 && option (Opt_middleClickPasteClipboard))
+        {
+          // reserve Button2 for local clipboard paste in all mouse modes.
+          local_button2 = true;
+          MEvent.button = Button2;
+          MEvent.state = ev.state;
+          MEvent.time = ev.time;
+          return;
+        }
+
       if (HOOK_INVOKE ((this, HOOK_BUTTON_PRESS, DT_XEVENT, &ev, DT_END)))
         return;
 
@@ -2168,6 +2182,19 @@ rxvt_term::button_release (XButtonEvent &ev)
 
   if (ev.window == vt)
     {
+      if (ev.button == Button2
+          && (local_button2 || option (Opt_middleClickPasteClipboard)))
+        {
+          local_button2 = false;
+          MEvent.button = AnyButton;
+
+          if (IN_RANGE_EXC (ev.x, 0, vt_width)
+              && IN_RANGE_EXC (ev.y, 0, vt_height))
+            selection_request (ev.time, Sel_Clipboard, false);
+
+          return;
+        }
+
       if (HOOK_INVOKE ((this, HOOK_BUTTON_RELEASE, DT_XEVENT, &ev, DT_END)))
         return;
 
@@ -3291,7 +3318,7 @@ rxvt_term::get_to_st (string_term &st)
 
       seen_esc = false;
 
-      if (n >= sizeof (string) - 1)
+      if (n >= ecb_array_length (string) - 1)
         // stop at some sane length
         return NULL;
 
@@ -3486,6 +3513,67 @@ rxvt_term::process_color_seq (int report, int color, const char *str, string_ter
  * XTerm escape sequences: ESC ] Ps;Pt (ST|BEL)
  */
 void
+rxvt_term::process_osc52 (char *str)
+{
+  if (!option (Opt_osc52Write))
+    return;
+
+  char *payload = strchr (str, ';');
+  if (!payload)
+    return;
+
+  *payload++ = 0;
+  if (!strcmp (payload, "?"))
+    return; // clipboard readback is deliberately unsupported.
+
+  bool set_primary = false;
+  bool set_clipboard = false;
+
+  if (!*str)
+    set_primary = set_clipboard = option (Opt_selectionToClipboard);
+
+  for (const char *selector = str; *selector; selector++)
+    if (*selector == 'c')
+      set_clipboard = true;
+    else if (*selector == 'p')
+      set_primary = true;
+    else if (*selector == 's')
+      {
+        set_primary = true;
+        if (option (Opt_selectionToClipboard))
+          set_clipboard = true;
+      }
+    else
+      return; // secondary and cut-buffer targets are not implemented.
+
+  if (!set_primary && !set_clipboard)
+    set_primary = true; // empty Pc is xterm's configurable selection.
+
+  size_t encoded_len = strlen (payload);
+  size_t decoded_len = 0;
+  if (rxvt_osc52::decoded_length (payload, encoded_len, osc52_max_bytes,
+                                  decoded_len) != rxvt_osc52::decode_ok)
+    return;
+
+  unsigned char *decoded = (unsigned char *)rxvt_malloc (decoded_len + 1);
+  size_t written = 0;
+  rxvt_osc52::decode_result result = rxvt_osc52::decode (
+    payload, encoded_len, osc52_max_bytes, decoded, written);
+
+  if (result == rxvt_osc52::decode_ok
+      && rxvt_osc52::valid_utf8_text (decoded, written))
+    {
+      decoded[written] = 0;
+      if (set_primary)
+        selection_set_utf8 ((const char *)decoded, written, CurrentTime, false);
+      if (set_clipboard)
+        selection_set_utf8 ((const char *)decoded, written, CurrentTime, true);
+    }
+
+  free (decoded);
+}
+
+void
 rxvt_term::process_xterm_seq (int op, char *str, string_term &st)
 {
   int color;
@@ -3612,6 +3700,10 @@ rxvt_term::process_xterm_seq (int op, char *str, string_term &st)
 
       case XTerm_logfile:
         // TODO, when secure mode?
+        break;
+
+      case XTerm_selection:
+        process_osc52 (str);
         break;
 
 #if 0

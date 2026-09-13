@@ -40,6 +40,10 @@
   def (meta8)
 #endif
   def (xtermCompat)
+  def (selectionToClipboard)
+  def (middleClickPasteClipboard)
+  def (osc52Write)
+  def (osc52MaxBytes)
 #ifdef MOUSE_WHEEL
   def (mouseWheelScrollPage)
 #endif

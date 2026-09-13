@@ -596,6 +596,9 @@ rxvt_term::init_vars ()
   set_option (Opt_pastableTabs);
   set_option (Opt_intensityStyles);
   set_option (Opt_xtermCompat);
+  set_option (Opt_selectionToClipboard);
+  set_option (Opt_middleClickPasteClipboard);
+  set_option (Opt_osc52Write);
   set_option (Opt_iso14755);
   set_option (Opt_iso14755_52);
   set_option (Opt_buffered);
@@ -724,6 +727,19 @@ rxvt_term::init_resources (int argc, const char *const *argv)
     multiClickTime = i;
   else
     multiClickTime = 500;
+
+  osc52_max_bytes = 16384;
+  if (rs[Rs_osc52MaxBytes])
+    {
+      char *end;
+      unsigned long value = strtoul (rs[Rs_osc52MaxBytes], &end, 10);
+
+      // OSC input must fit in the terminal's fixed command buffer.
+      if (*rs[Rs_osc52MaxBytes] && !*end && value <= 24000)
+        osc52_max_bytes = value;
+      else
+        rxvt_warn ("invalid osc52MaxBytes, must be between 0 and 24000.\n");
+    }
 
   cursor_type = option (Opt_cursorUnderline) ? 1 : 0;
 

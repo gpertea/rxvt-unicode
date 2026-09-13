@@ -382,7 +382,8 @@ struct rxvt_color
 
 struct rxvt_selection
 {
-  rxvt_selection (rxvt_display *disp, int selnum, Time tm, Window win, Atom prop, rxvt_term *term);
+  rxvt_selection (rxvt_display *disp, int selnum, Time tm, Window win,
+                  Atom prop, rxvt_term *term, bool fallback = true);
   void run ();
   ~rxvt_selection ();
 
@@ -397,6 +398,7 @@ struct rxvt_selection
 private:
   unsigned char selection_wait;
   unsigned char selection_type;
+  bool allow_fallback;
 
   char *incr_buf;
   size_t incr_buf_size, incr_buf_fill;
