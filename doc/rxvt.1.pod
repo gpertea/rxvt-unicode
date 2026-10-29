@@ -1486,6 +1486,13 @@ desired mouse action. With B<middleClickPasteClipboard> enabled, Button2 is
 always a local CLIPBOARD paste and needs no modifier. Button1, Button3, and
 wheel events retain normal application mouse routing.
 
+An application killed without cleanup can leave mouse reporting enabled at
+the shell prompt. A hard terminal reset (B<ESC c>), including the standard
+B<reset> command with the usual xterm or rxvt-unicode terminfo, disables
+mouse tracking and its encodings, focus reporting, and bracketed paste.
+It also clears saved values of these modes. Killing an application does not
+itself reset the terminal. A soft reset (DECSTR) retains its existing behavior.
+
 If mouse reporting mode is active, the normal scrollbar actions are
 disabled -- on the assumption that we are using a fullscreen
 application. Instead, pressing Button1 and Button3 sends B<ESC [ 6 ~>

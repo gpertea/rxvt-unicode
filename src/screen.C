@@ -461,6 +461,23 @@ rxvt_term::scr_release () noexcept
 void ecb_cold
 rxvt_term::scr_poweron ()
 {
+  // discard input modes even if the application died before disabling them.
+  const unsigned long input_modes = PrivMode_mouse_report
+    | PrivMode_ExtMouseUTF8 | PrivMode_ExtMouseSGR | PrivMode_ExtMouseUrxvt
+    | PrivMode_FocusEvent | PrivMode_BracketPaste;
+  priv_modes &= ~input_modes;
+  SavedModes &= ~input_modes;
+
+  // cancel an unfinished mouse gesture and remove motion-event selection.
+  MEvent.clicks = 0;
+  MEvent.time = CurrentTime;
+  MEvent.state = 0;
+  MEvent.button = AnyButton;
+  local_button2 = false;
+  mouse_row = mouse_col = 0;
+  vt_emask_mouse = NoEventMask;
+  vt_select_input ();
+
   scr_release ();
 
   prev_nrow = prev_ncol = 0;

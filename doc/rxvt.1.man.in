@@ -1480,6 +1480,13 @@ To temporarily override mouse reporting, for either the scrollbar or
 the normal text selection/insertion, hold either the Shift or the Meta
 (Alt) key while performing the desired mouse action.
 .PP
+An application killed without cleanup can leave mouse reporting enabled at
+the shell prompt. A hard terminal reset (\fBESC c\fR), including the standard
+\fBreset\fR command with the usual xterm or rxvt-unicode terminfo, disables
+mouse tracking and its encodings, focus reporting, and bracketed paste.
+It also clears saved values of these modes. Killing an application does not
+itself reset the terminal. A soft reset (DECSTR) retains its existing behavior.
+.PP
 If mouse reporting mode is active, the normal scrollbar actions are
 disabled \*(-- on the assumption that we are using a fullscreen
 application. Instead, pressing Button1 and Button3 sends \fB\s-1ESC\s0 [ 6 ~\fR

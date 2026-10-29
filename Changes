@@ -4,6 +4,10 @@ rxvt-unicode changelog <= google-friendly title
 	  key sequences, truthful TERM selection, and RGB OSC color replies.
 	- add native PRIMARY/CLIPBOARD unification, strict local Button2 clipboard
 	  paste, and size-limited write-only OSC 52 support for tmux and SSH.
+	- clear live and saved mouse, focus, and bracketed-paste reporting modes
+	  on hard reset, so reset recovers from applications killed without cleanup.
+	- retain command-line resources merged into an empty X resource database
+	  and prevent a second database destruction when the display closes.
 
 TODO: xcopyarea pass broken, fix and improve
 TODO: event mechanism that replaces on_user_command with something more scalable.
