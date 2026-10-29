@@ -559,6 +559,10 @@ rxvt_display::~rxvt_display ()
   xims.clear ();
 #endif
   XrmDestroyDatabase (XrmGetDatabase (dpy));
+#if XLIB_ILLEGAL_ACCESS
+  // XCloseDisplay must not free the resource database a second time.
+  dpy->db = 0;
+#endif
   XCloseDisplay (dpy);
 }
 

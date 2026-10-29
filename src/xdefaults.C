@@ -791,6 +791,10 @@ rxvt_term::extract_resources ()
 #ifndef NO_RESOURCES
   XrmDatabase database = XrmGetDatabase (dpy);
   XrmMergeDatabases (option_db, &database);
+#if XLIB_ILLEGAL_ACCESS
+  // a null database can acquire a new handle; preserve Xlib ownership flags.
+  dpy->db = database;
+#endif
   option_db = NULL;
   /*
    * Query resources for options that affect us
