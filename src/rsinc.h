@@ -42,6 +42,7 @@
   def (xtermCompat)
   def (selectionToClipboard)
   def (middleClickPasteClipboard)
+  def (mouseAutoReset)
   def (osc52Write)
   def (osc52MaxBytes)
 #ifdef MOUSE_WHEEL

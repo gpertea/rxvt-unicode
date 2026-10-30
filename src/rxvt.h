@@ -233,6 +233,12 @@ struct mouse_event
   unsigned int button;   /* detail */
 };
 
+struct mouse_mode_state
+{
+  pid_t pgrp;
+  unsigned long modes, saved;
+};
+
 #if ENABLE_XEMBED
 // XEMBED messages
 # define XEMBED_EMBEDDED_NOTIFY          0
@@ -598,6 +604,7 @@ enum {
 #define PrivMode_ExtMouseSGR    (1UL<<27)
 
 #define PrivMode_mouse_report   (PrivMode_MouseX10|PrivMode_MouseX11|PrivMode_MouseBtnEvent|PrivMode_MouseAnyEvent)
+#define PrivMode_mouse_input    (PrivMode_mouse_report|PrivMode_ExtMouseUTF8|PrivMode_ExtMouseSGR|PrivMode_ExtMouseUrxvt|PrivMode_FocusEvent)
 
 #ifdef ALLOW_132_MODE
 # define PrivMode_Default (PrivMode_Autowrap|PrivMode_ShiftKeys|PrivMode_VisibleCursor|PrivMode_132OK)
@@ -1184,6 +1191,8 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   pid_t           cmd_pid;    /* process id of child */
 /* ---------- */
   struct mouse_event MEvent;
+  pid_t mouse_pgrp;
+  vector<mouse_mode_state> mouse_modes;
   XComposeStatus  compose;
   static struct termios def_tio;
   row_col_t       oldcursor;
@@ -1284,6 +1293,9 @@ struct rxvt_term : zero_initialized, rxvt_vars, rxvt_screen
   void cmdbuf_append (const char *str, size_t count);
   bool pty_fill ();
   void pty_cb (ev::io &w, int revents); ev::io pty_ev;
+  void mouse_reset_state ();
+  void mouse_cleanup_check (bool force = false);
+  void mouse_cleanup_cb (ev::timer &w, int revents); ev::timer mouse_cleanup_ev;
 
 #ifdef CURSOR_BLINK
   void cursor_blink_reset ();

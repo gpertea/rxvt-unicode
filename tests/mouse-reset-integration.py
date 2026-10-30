@@ -202,11 +202,11 @@ def xdo(*args):
     return subprocess.check_output(["xdotool", *map(str, args)], timeout=5, text=True).strip()
 
 
-def start_terminal(binary, directory, title, command):
+def start_terminal(binary, directory, title, command, cleanup=False, options=()):
     log = (directory / (title + ".log")).open("w")
     process = subprocess.Popen([
         binary, "-title", title, "-geometry", "80x24", "-fn", "fixed",
-        "+pb", "-e", *command,
+        "+pb", *([] if cleanup else ["+mouse-auto-reset"]), *options, "-e", *command,
     ], stdout=log, stderr=log, env={**os.environ, "HOME": str(directory)})
     log.close()
     return process
@@ -238,12 +238,16 @@ def bash_case(binary, directory, use_tmux):
     )
     shell = ["bash", "--noprofile", "--rcfile", str(rc), "-i"]
     socket = str(directory / "tmux.sock")
+    tmux_binary = os.environ.get("TMUX_MOUSE_CLEANUP_BINARY", "tmux")
     if use_tmux:
-        shell = ["tmux", "-S", socket, "-f", "/dev/null", "new-session", *shell]
+        shell = [tmux_binary, "-S", socket, "-f", "/dev/null", "new-session", *shell]
     title = f"mouse-reset-bash-{os.getpid()}-{int(use_tmux)}"
     process = start_terminal(binary, directory, title, shell)
     try:
         wait_for(pid_file.exists, "Bash child ready")
+        if use_tmux and os.environ.get("TMUX_MOUSE_CLEANUP_BINARY"):
+            ## retain the stale-mode precondition for hard-reset recovery tests.
+            subprocess.run([tmux_binary, "-S", socket, "set-window-option", "mouse-auto-reset", "off"], check=True, timeout=5)
         window = find_window(title)
         xdo("windowfocus", "--sync", window)
         xdo("windowraise", window)
@@ -268,7 +272,7 @@ def bash_case(binary, directory, use_tmux):
         assert capture(180) == "", "mouse fragments reached Bash after reset"
     finally:
         if use_tmux:
-            subprocess.run(["tmux", "-S", socket, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
+            subprocess.run([tmux_binary, "-S", socket, "kill-server"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=5)
         stop(process)
 
 
@@ -338,6 +342,9 @@ def main(binary):
                 (directory / f"done-{index}").touch()
                 index += 1
             results = json.loads((directory / "results.json").read_text())
+            for log in directory.glob("*.log"):
+                if "unable to initialize perl-interpreter" in log.read_text():
+                    raise RuntimeError("Perl initialization failed: " + log.read_text())
             process.wait(timeout=5)
         finally:
             stop(process)
@@ -360,7 +367,7 @@ def main(binary):
         return int(any(error for _, error in results))
 
 
-def daemon_suite(binary):
+def daemon_suite(binary, run=main):
     directory = Path(binary).resolve().parent
     with tempfile.TemporaryDirectory(prefix="urxvt-reset-daemon-") as scratch:
         old_socket = os.environ.get("RXVT_SOCKET")
@@ -371,7 +378,11 @@ def daemon_suite(binary):
         try:
             wait_for(lambda: Path(socket).exists(), "private urxvtd socket")
             print("Testing isolated urxvtd/urxvtc", flush=True)
-            return main(str(directory / "rxvtc"))
+            result = run(str(directory / "rxvtc"))
+            log = (Path(scratch) / "daemon.log").read_text()
+            if "unable to initialize perl-interpreter" in log:
+                raise RuntimeError("private daemon failed to initialize Perl: " + log)
+            return result
         finally:
             stop(daemon)
             if old_socket is None:

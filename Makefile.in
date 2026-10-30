@@ -71,13 +71,16 @@ check-xterm-compat:
 	   && command -v xdotool >/dev/null 2>&1 \
 	   && command -v xclip >/dev/null 2>&1 \
 	   && command -v xprop >/dev/null 2>&1; then \
-	  PERL5LIB="src:$(srcdir)/src$${PERL5LIB:+:$$PERL5LIB}" \
-	  URXVT_PERL_LIB="$(srcdir)/src/perl" \
+	  test_srcdir=$$(cd "$(srcdir)" && pwd); \
+	  PERL5LIB="$$(pwd)/src:$$test_srcdir/src$${PERL5LIB:+:$$PERL5LIB}" \
+	  URXVT_PERL_LIB="$$test_srcdir/src/perl" \
 	  xvfb-run -a sh -c '\
 	    $(srcdir)/tests/xterm-compat-integration src/rxvt && \
 	    $(srcdir)/tests/clipboard-tmux-integration src/rxvt && \
 	    python3 $(srcdir)/tests/mouse-reset-integration.py src/rxvt && \
-	    python3 $(srcdir)/tests/mouse-reset-integration.py --daemon src/rxvt'; \
+	    python3 $(srcdir)/tests/mouse-reset-integration.py --daemon src/rxvt && \
+	    python3 $(srcdir)/tests/mouse-cleanup-integration.py src/rxvt && \
+	    python3 $(srcdir)/tests/mouse-cleanup-integration.py --daemon src/rxvt'; \
 	else \
 	  echo "SKIP X integration tests: Xvfb, xdotool, xclip, or xprop unavailable"; \
 	fi

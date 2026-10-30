@@ -468,15 +468,11 @@ rxvt_term::scr_poweron ()
   priv_modes &= ~input_modes;
   SavedModes &= ~input_modes;
 
-  // cancel an unfinished mouse gesture and remove motion-event selection.
-  MEvent.clicks = 0;
-  MEvent.time = CurrentTime;
-  MEvent.state = 0;
-  MEvent.button = AnyButton;
-  local_button2 = false;
-  mouse_row = mouse_col = 0;
-  vt_emask_mouse = NoEventMask;
-  vt_select_input ();
+  // hard reset must also discard suspended jobs' saved mouse state.
+  mouse_modes.clear ();
+  mouse_pgrp = 0;
+  mouse_cleanup_ev.stop ();
+  mouse_reset_state ();
 
   scr_release ();
 

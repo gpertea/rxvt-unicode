@@ -22,8 +22,11 @@ tests/emit-osc52.py
 tests/xterm-compat-integration
 tests/clipboard-tmux-integration
 tests/mouse-reset-integration.py
+tests/mouse-cleanup-integration.py
 
 contrib/tmux/urxvt-integration.conf
+contrib/tmux/mouse-auto-reset-3.4.patch
+contrib/tmux/mouse-auto-reset.md
 
 doc/embed
 doc/embed-tk

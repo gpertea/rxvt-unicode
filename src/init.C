@@ -598,6 +598,7 @@ rxvt_term::init_vars ()
   set_option (Opt_xtermCompat);
   set_option (Opt_selectionToClipboard);
   set_option (Opt_middleClickPasteClipboard);
+  set_option (Opt_mouseAutoReset);
   set_option (Opt_osc52Write);
   set_option (Opt_iso14755);
   set_option (Opt_iso14755_52);

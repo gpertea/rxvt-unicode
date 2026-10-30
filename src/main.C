@@ -188,6 +188,8 @@ rxvt_term::rxvt_term ()
   flush_ev.set            <rxvt_term, &rxvt_term::flush_cb>   (this);
   destroy_ev.set          <rxvt_term, &rxvt_term::destroy_cb> (this);
   pty_ev.set              <rxvt_term, &rxvt_term::pty_cb>     (this);
+  mouse_cleanup_ev.set    <rxvt_term, &rxvt_term::mouse_cleanup_cb> (this);
+  mouse_cleanup_ev.set (0.1, 0.1);
   termwin_ev.set          <rxvt_term, &rxvt_term::x_cb>       (this);
   vt_ev.set               <rxvt_term, &rxvt_term::x_cb>       (this);
 
@@ -209,6 +211,7 @@ rxvt_term::emergency_cleanup ()
     kill (-cmd_pid, SIGHUP);
 
   pty_ev.stop ();
+  mouse_cleanup_ev.stop ();
   delete pty; pty = 0;
 }
 
@@ -299,7 +302,19 @@ rxvt_term::~rxvt_term ()
 void
 rxvt_term::child_cb (ev::child &w, int status)
 {
+  make_current ();
   HOOK_INVOKE ((this, HOOK_CHILD_EXIT, DT_INT, status, DT_END));
+
+  // held-open terminals must release mouse ownership after their child exits.
+  if (option (Opt_mouseAutoReset))
+    {
+      priv_modes &= ~PrivMode_mouse_input;
+      SavedModes &= ~PrivMode_mouse_input;
+      mouse_modes.clear ();
+      mouse_pgrp = 0;
+      mouse_cleanup_ev.stop ();
+      mouse_reset_state ();
+    }
 
   cmd_pid = 0;
 
@@ -333,6 +348,7 @@ rxvt_term::destroy ()
     }
 
   flush_ev.stop ();
+  mouse_cleanup_ev.stop ();
   pty_ev.stop ();
 #ifdef CURSOR_BLINK
   cursor_blink_ev.stop ();

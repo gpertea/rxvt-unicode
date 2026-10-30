@@ -1,0 +1,270 @@
+--- a/input.c
++++ b/input.c
+@@ -21,10 +21,13 @@
+ #include <netinet/in.h>
+ 
+ #include <ctype.h>
++#include <errno.h>
++#include <signal.h>
+ #include <resolv.h>
+ #include <stdlib.h>
+ #include <string.h>
+ #include <time.h>
++#include <unistd.h>
+ 
+ #include "tmux.h"
+ 
+@@ -72,6 +75,12 @@
+ 	};
+ };
+ 
++struct input_mouse_state {
++	pid_t pgrp;
++	int mode;
++	struct input_mouse_state *next;
++};
++
+ /* Input parser context. */
+ struct input_ctx {
+ 	struct window_pane     *wp;
+@@ -117,6 +126,9 @@
+ 	const struct input_state *state;
+ 
+ 	struct event		timer;
++	struct event		mouse_timer;
++	pid_t			mouse_pgrp;
++	struct input_mouse_state *mouse_jobs;
+ 
+ 	/*
+ 	 * All input received since we were last in the ground state. Sent to
+@@ -127,6 +139,8 @@
+ 
+ /* Helper functions. */
+ struct input_transition;
++static void input_clear_mouse(struct input_ctx *);
++static void input_mouse_timer(int, short, void *);
+ static int	input_split(struct input_ctx *);
+ static int	input_get(struct input_ctx *, u_int, int, int);
+ static void printflike(2, 3) input_reply(struct input_ctx *, const char *, ...);
+@@ -823,6 +837,7 @@
+ 		fatalx("out of memory");
+ 
+ 	evtimer_set(&ictx->timer, input_timer_callback, ictx);
++	evtimer_set(&ictx->mouse_timer, input_mouse_timer, ictx);
+ 
+ 	input_reset(ictx, 0);
+ 	return (ictx);
+@@ -841,6 +856,7 @@
+ 
+ 	event_del(&ictx->timer);
+ 
++	input_clear_mouse(ictx);
+ 	free(ictx->input_buf);
+ 	evbuffer_free(ictx->since_ground);
+ 
+@@ -857,6 +873,7 @@
+ 	input_reset_cell(ictx);
+ 
+ 	if (clear && wp != NULL) {
++		input_clear_mouse(ictx);
+ 		if (TAILQ_EMPTY(&wp->modes))
+ 			screen_write_start_pane(sctx, wp, &wp->base);
+ 		else
+@@ -871,6 +888,99 @@
+ 
+ 	ictx->state = &input_state_ground;
+ 	ictx->flags = 0;
++}
++
++static void
++input_clear_mouse(struct input_ctx *ictx)
++{
++	struct input_mouse_state *job;
++
++	event_del(&ictx->mouse_timer);
++	while ((job = ictx->mouse_jobs) != NULL) {
++		ictx->mouse_jobs = job->next;
++		free(job);
++	}
++	ictx->mouse_pgrp = 0;
++}
++
++void
++input_check_mouse(struct window_pane *wp)
++{
++	struct input_ctx *ictx;
++	struct input_mouse_state *job, **link;
++	struct timeval tv = { .tv_usec = 100000 };
++	pid_t foreground;
++	int modes, previous;
++	const int mask = ALL_MOUSE_MODES | MODE_MOUSE_UTF8 | MODE_MOUSE_SGR | MODE_FOCUSON;
++
++	if (wp == NULL || wp->ictx == NULL)
++		return;
++	ictx = wp->ictx;
++	if (!options_get_number(wp->options, "mouse-auto-reset")) {
++		input_clear_mouse(ictx);
++		return;
++	}
++	if (wp->fd == -1) {
++		wp->base.mode &= ~mask;
++		input_clear_mouse(ictx);
++		return;
++	}
++	foreground = tcgetpgrp(wp->fd);
++	if (foreground <= 1)
++		return;
++	previous = wp->base.mode & mask;
++	if (foreground != ictx->mouse_pgrp) {
++		/* save stopped jobs without leaking their modes into the shell. */
++		for (link = &ictx->mouse_jobs; (job = *link) != NULL; ) {
++			if (job->pgrp == ictx->mouse_pgrp) {
++				*link = job->next;
++				free(job);
++			} else
++				link = &job->next;
++		}
++		if (ictx->mouse_pgrp > 1 && previous != 0) {
++			job = xcalloc(1, sizeof *job);
++			job->pgrp = ictx->mouse_pgrp;
++			job->mode = previous;
++			job->next = ictx->mouse_jobs;
++			ictx->mouse_jobs = job;
++		}
++		wp->base.mode &= ~mask;
++		for (job = ictx->mouse_jobs; job != NULL; job = job->next) {
++			if (job->pgrp == foreground) {
++				wp->base.mode |= job->mode;
++				break;
++			}
++		}
++		ictx->mouse_pgrp = foreground;
++	}
++	/* dead process groups cannot resume or restore stale state. */
++	for (link = &ictx->mouse_jobs; (job = *link) != NULL; ) {
++		if (kill(-job->pgrp, 0) == -1 && errno == ESRCH) {
++			*link = job->next;
++			free(job);
++		} else
++			link = &job->next;
++	}
++	if (kill(-ictx->mouse_pgrp, 0) == -1 && errno == ESRCH) {
++		wp->base.mode &= ~mask;
++		ictx->mouse_pgrp = 0;
++	}
++	modes = wp->base.mode & mask;
++	if (modes != previous)
++		wp->flags |= PANE_CHANGED;
++	if (modes != 0 || ictx->mouse_jobs != NULL)
++		evtimer_add(&ictx->mouse_timer, &tv);
++	else
++		event_del(&ictx->mouse_timer);
++}
++
++static void
++input_mouse_timer(__unused int fd, __unused short events, void *data)
++{
++	struct input_ctx *ictx = data;
++
++	input_check_mouse(ictx->wp);
+ }
+ 
+ /* Return pending data. */
+@@ -969,6 +1079,7 @@
+ 	struct input_ctx	*ictx = wp->ictx;
+ 	struct screen_write_ctx	*sctx = &ictx->ctx;
+ 
++	input_check_mouse(wp);
+ 	if (len == 0)
+ 		return;
+ 
+@@ -990,6 +1101,7 @@
+ 
+ 	input_parse(ictx, buf, len);
+ 	screen_write_stop(sctx);
++	input_check_mouse(wp);
+ }
+ 
+ /* Parse given input for screen. */
+@@ -1286,6 +1398,7 @@
+ 
+ 	switch (entry->type) {
+ 	case INPUT_ESC_RIS:
++		input_clear_mouse(ictx);
+ 		colour_palette_clear(ictx->palette);
+ 		input_reset_cell(ictx);
+ 		screen_write_reset(sctx);
+--- a/input-keys.c
++++ b/input-keys.c
+@@ -405,6 +405,7 @@
+ int
+ input_key_pane(struct window_pane *wp, key_code key, struct mouse_event *m)
+ {
++	input_check_mouse(wp);
+ 	if (log_get_level() != 0) {
+ 		log_debug("writing key 0x%llx (%s) to %%%u", key,
+ 		    key_string_lookup_key(key, 1), wp->id);
+--- a/server-client.c
++++ b/server-client.c
+@@ -587,6 +587,8 @@
+ 
+ 	log_debug("%s mouse %02x at %u,%u (last %u,%u) (%d)", c->name, m->b,
+ 	    m->x, m->y, m->lx, m->ly, c->tty.mouse_drag_flag);
++	TAILQ_FOREACH(wp, &s->curw->window->panes, entry)
++		input_check_mouse(wp);
+ 
+ 	/* What type of event is this? */
+ 	if (event->key == KEYC_DOUBLECLICK) {
+--- a/tmux.h
++++ b/tmux.h
+@@ -2802,6 +2802,7 @@
+ void	 recalculate_sizes_now(int);
+ 
+ /* input.c */
++void	 input_check_mouse(struct window_pane *);
+ struct input_ctx *input_init(struct window_pane *, struct bufferevent *,
+ 	     struct colour_palette *);
+ void	 input_free(struct input_ctx *);
+--- a/options-table.c
++++ b/options-table.c
+@@ -980,6 +980,13 @@
+ 	  .text = "Style of indicators and highlighting in modes."
+ 	},
+ 
++	{ .name = "mouse-auto-reset",
++	  .type = OPTIONS_TABLE_FLAG,
++	  .scope = OPTIONS_TABLE_WINDOW,
++	  .default_num = 1,
++	  .text = "Keep application mouse reporting with its foreground job."
++	},
++
+ 	{ .name = "monitor-activity",
+ 	  .type = OPTIONS_TABLE_FLAG,
+ 	  .scope = OPTIONS_TABLE_WINDOW,
+--- a/window.c
++++ b/window.c
+@@ -482,6 +482,7 @@
+ 	int		 focused = 0;
+ 
+ 	if (wp != NULL) {
++		input_check_mouse(wp);
+ 		if (wp != wp->window->active)
+ 			focused = 0;
+ 		else {
+--- a/tmux.1
++++ b/tmux.1
+@@ -4489,6 +4489,14 @@
+ .Sx STYLES
+ section.
+ .Pp
++.It Xo Ic mouse-auto-reset
++.Op Ic on | off
++.Xc
++Keep application mouse and focus reporting with the foreground job in each pane.
++Reporting is disabled when another job takes the foreground, and restored when
++a stopped job resumes. Dead jobs cannot restore their modes.
++This is on by default. Turn it off for deliberate mode inheritance between jobs.
++Bracketed paste and the session-level mouse option are unchanged.
+ .It Xo Ic monitor-activity
+ .Op Ic on | off
+ .Xc

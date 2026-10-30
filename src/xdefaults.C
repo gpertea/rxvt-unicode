@@ -108,6 +108,7 @@ optList[] = {
               BOOL (Rs_xtermCompat, "xtermCompat", "xterm-compat", Opt_xtermCompat, 0, "use xterm-compatible key and color-query responses"),
               BOOL (Rs_selectionToClipboard, "selectionToClipboard", "selection-to-clipboard", Opt_selectionToClipboard, 0, "copy selections to PRIMARY and CLIPBOARD"),
               BOOL (Rs_middleClickPasteClipboard, "middleClickPasteClipboard", "middle-click-paste-clipboard", Opt_middleClickPasteClipboard, 0, "paste CLIPBOARD locally with Button2"),
+              BOOL (Rs_mouseAutoReset, "mouseAutoReset", "mouse-auto-reset", Opt_mouseAutoReset, 0, "clean up mouse reporting on foreground job changes"),
               BOOL (Rs_osc52Write, "osc52Write", "osc52-write", Opt_osc52Write, 0, "allow write-only OSC 52 clipboard updates"),
               STRG (Rs_osc52MaxBytes, "osc52MaxBytes", "osc52-max-bytes", "number", "maximum decoded OSC 52 bytes"),
               RSTRG (Rs_scrollstyle, "scrollstyle", "mode"),

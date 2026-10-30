@@ -1013,6 +1013,24 @@ reporting. A missing or empty CLIPBOARD does not fall back to PRIMARY or
 CUT_BUFFER0. Paste hooks, bracketed paste, and \f(CW\*(C`confirm\-paste\*(C'\fR still apply.
 Button2\-specific application and Perl mouse bindings require this option to
 be disabled with \fB+middle\-click\-paste\-clipboard\fR.
+.IP "\fBmouseAutoReset:\fR \fIboolean\fR" 4
+.IX Item "mouseAutoReset: boolean"
+Associate mouse tracking, mouse encodings, and focus reporting with the
+observed foreground process group [default true]. Returning to the shell
+after a local job exits or stops releases those modes automatically. A
+stopped job regains its modes when it resumes in the foreground. Hard reset
+discards all such saved state. Held-open terminals release mouse state when
+their initial child exits. Bracketed paste remains application policy.
+.Sp
+No shell cleanup hook is required. Foreground state is checked before X input
+and every 100 ms while mouse state exists. If the PTY cannot report its
+foreground group, existing reporting is retained. A job that exits before its
+mode-setting output is parsed may not be distinguishable from the shell.
+.Sp
+An outer terminal cannot observe job changes inside a surviving SSH or tmux
+connection. The supplied tmux 3.4 companion patch applies the same policy to
+each pane. Use \fB+mouse-auto-reset\fR or resource mouseAutoReset: false for
+deliberate mouse-mode inheritance between foreground jobs.
 .IP "\fBosc52Write:\fR \fIboolean\fR" 4
 .IX Item "osc52Write: boolean"
 Allow applications to set X selections with \f(CW\*(C`OSC 52 ; Pc ; Pd\*(C'\fR [default

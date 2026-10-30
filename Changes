@@ -1,5 +1,7 @@
 rxvt-unicode changelog <= google-friendly title
 
+	- clean up mouse/focus reporting when the observed foreground job exits
+	  or stops, and restore it for resumed jobs; enabled by mouseAutoReset.
 	- add a default-on xterm compatibility profile for standard modified
 	  key sequences, truthful TERM selection, and RGB OSC color replies.
 	- add native PRIMARY/CLIPBOARD unification, strict local Button2 clipboard

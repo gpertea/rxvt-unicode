@@ -1264,6 +1264,113 @@ rxvt_term::pty_cb (ev::io &w, int revents)
   refresh_check ();
 }
 
+void
+rxvt_term::mouse_reset_state ()
+{
+  MEvent.clicks = 0;
+  MEvent.time = CurrentTime;
+  MEvent.state = 0;
+  MEvent.button = AnyButton;
+  local_button2 = false;
+  mouse_row = mouse_col = 0;
+  vt_emask_mouse = priv_modes & (PrivMode_MouseBtnEvent | PrivMode_MouseAnyEvent)
+    ? PointerMotionMask : NoEventMask;
+  vt_select_input ();
+  display->flush ();
+}
+
+void
+rxvt_term::mouse_cleanup_check (bool force)
+{
+  if (!option (Opt_mouseAutoReset))
+    {
+      mouse_cleanup_ev.stop ();
+      mouse_modes.clear ();
+      mouse_pgrp = 0;
+      return;
+    }
+  if (!pty || pty->pty < 0)
+    return;
+
+  bool have_state = ((priv_modes | SavedModes) & PrivMode_mouse_input)
+    || !mouse_modes.empty ();
+  if (!force && !have_state)
+    {
+      mouse_cleanup_ev.stop ();
+      return;
+    }
+
+  pid_t foreground = tcgetpgrp (pty->pty);
+  if (foreground <= 1)
+    {
+      mouse_cleanup_ev.stop ();
+      return; // an unavailable foreground group must not disable a live client.
+    }
+
+  // learn job identity without disturbing local selection when no state exists.
+  if (!have_state)
+    {
+      mouse_pgrp = foreground;
+      mouse_cleanup_ev.stop ();
+      return;
+    }
+  if (mouse_pgrp <= 1 && mouse_modes.empty ())
+    mouse_pgrp = foreground; // adopt reporting enabled directly by an extension.
+
+  if (foreground != mouse_pgrp)
+    {
+      // keep per-job state so stopped applications can resume mouse input.
+      mouse_mode_state previous = { mouse_pgrp,
+        priv_modes & PrivMode_mouse_input, SavedModes & PrivMode_mouse_input };
+      for (unsigned int i = 0; i < mouse_modes.size (); i++)
+        if (mouse_modes[i].pgrp == mouse_pgrp)
+          {
+            mouse_modes.erase (mouse_modes.begin () + i);
+            break;
+          }
+      if (previous.pgrp > 1 && (previous.modes || previous.saved))
+        mouse_modes.push_back (previous);
+
+      priv_modes &= ~PrivMode_mouse_input;
+      SavedModes &= ~PrivMode_mouse_input;
+      for (unsigned int i = 0; i < mouse_modes.size (); i++)
+        if (mouse_modes[i].pgrp == foreground)
+          {
+            priv_modes |= mouse_modes[i].modes;
+            SavedModes |= mouse_modes[i].saved;
+            break;
+          }
+
+      mouse_pgrp = foreground;
+      mouse_reset_state ();
+    }
+
+  // retain stopped jobs, but discard state after their process group is gone.
+  for (unsigned int i = 0; i < mouse_modes.size (); )
+    if (kill (-mouse_modes[i].pgrp, 0) < 0 && errno == ESRCH)
+      mouse_modes.erase (mouse_modes.begin () + i);
+    else
+      i++;
+
+  if (kill (-mouse_pgrp, 0) < 0 && errno == ESRCH)
+    {
+      priv_modes &= ~PrivMode_mouse_input;
+      SavedModes &= ~PrivMode_mouse_input;
+      mouse_pgrp = 0;
+      mouse_reset_state ();
+    }
+
+  if (!((priv_modes | SavedModes) & PrivMode_mouse_input) && mouse_modes.empty ())
+    mouse_cleanup_ev.stop ();
+}
+
+void
+rxvt_term::mouse_cleanup_cb (ev::timer &w, int revents)
+{
+  make_current ();
+  mouse_cleanup_check ();
+}
+
 void ecb_cold
 rxvt_term::pointer_unblank ()
 {
@@ -1414,6 +1521,7 @@ void ecb_hot
 rxvt_term::x_cb (XEvent &ev)
 {
   make_current ();
+  mouse_cleanup_check ();
 
   dLocal (Display *, dpy);
 
@@ -3834,6 +3942,7 @@ rxvt_term::privcases (int mode, unsigned long bit)
 void
 rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int nargs, const int *arg)
 {
+  mouse_cleanup_check (true);
   unsigned int i, j;
   int state;
 
@@ -4055,6 +4164,10 @@ rxvt_term::process_terminal_mode (int mode, int priv ecb_unused, unsigned int na
               break;
           }
     }
+  if (option (Opt_mouseAutoReset)
+      && (((priv_modes | SavedModes) & PrivMode_mouse_input) || !mouse_modes.empty ())
+      && !mouse_cleanup_ev.is_active ())
+    mouse_cleanup_ev.again ();
 }
 /*}}} */
 

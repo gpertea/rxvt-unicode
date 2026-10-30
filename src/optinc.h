@@ -14,6 +14,7 @@
  def(xtermCompat)
  def(selectionToClipboard)
  def(middleClickPasteClipboard)
+ def(mouseAutoReset)
  def(osc52Write)
  def(scrollTtyOutput)
  def(scrollTtyKeypress)
